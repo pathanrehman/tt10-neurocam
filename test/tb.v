@@ -50,28 +50,33 @@ module tb ();
 
   // Optional: Monitor key internal signals for debugging (RTL simulation only)
 `ifndef GL_TEST
-  // Monitor pipeline stages for debugging
-  wire [15:0] current_search_pattern = neurocam_dut.search_pipeline[3];
-  wire [5:0] current_best_addr = neurocam_dut.best_match_addr;
-  wire [4:0] current_distance = neurocam_dut.best_distance;
+  // FIXED: Monitor pipeline stages for debugging using actual signal names
+  wire [11:0] current_search_pattern = neurocam_dut.search_pipeline_3;
+  wire [4:0] current_best_addr = neurocam_dut.best_match_addr;
+  wire [3:0] current_distance = neurocam_dut.best_distance;
   wire [7:0] current_confidence = neurocam_dut.confidence_score;
   wire current_match_valid = neurocam_dut.match_valid;
   
-  // Monitor bank distances for verification
-  wire [4:0] bank0_best = neurocam_dut.bank_best_distances[0];
-  wire [4:0] bank1_best = neurocam_dut.bank_best_distances[1];
-  wire [4:0] bank2_best = neurocam_dut.bank_best_distances[2];
-  wire [4:0] bank3_best = neurocam_dut.bank_best_distances[3];
+  // FIXED: Monitor individual distance calculations
+  wire [3:0] dist_0_0 = neurocam_dut.dist_0_0;
+  wire [3:0] dist_0_1 = neurocam_dut.dist_0_1;
+  wire [3:0] dist_1_0 = neurocam_dut.dist_1_0;
+  wire [3:0] dist_1_1 = neurocam_dut.dist_1_1;
   
-  // Monitor pattern memory (first few patterns for debugging)
-  wire [15:0] pattern_0_bank_0 = neurocam_dut.pattern_banks[0][0];
-  wire [15:0] pattern_1_bank_0 = neurocam_dut.pattern_banks[0][1];
-  wire [15:0] pattern_0_bank_1 = neurocam_dut.pattern_banks[1][0];
+  // FIXED: Monitor pattern memory using actual individual register names
+  wire [11:0] pattern_0_bank_0 = neurocam_dut.pattern_bank_0_0;
+  wire [11:0] pattern_1_bank_0 = neurocam_dut.pattern_bank_0_1;
+  wire [11:0] pattern_0_bank_1 = neurocam_dut.pattern_bank_1_0;
   
-  // Monitor learning system
-  wire [15:0] learned_pattern_0 = neurocam_dut.learned_patterns[0];
-  wire learning_active = neurocam_dut.learning_enable;
-  wire [2:0] current_match_mode = neurocam_dut.match_mode;
+  // FIXED: Monitor minimum finder
+  wire [3:0] min_distance = neurocam_dut.min_distance;
+  wire [4:0] min_addr = neurocam_dut.min_addr;
+  
+  // FIXED: Monitor usage counters (only 4 exist)
+  wire [7:0] usage_0 = neurocam_dut.usage_counter_0;
+  wire [7:0] usage_1 = neurocam_dut.usage_counter_1;
+  wire [7:0] usage_2 = neurocam_dut.usage_counter_2;
+  wire [7:0] usage_3 = neurocam_dut.usage_counter_3;
 `endif
 
   // Clock generation for 25MHz operation (40ns period)
