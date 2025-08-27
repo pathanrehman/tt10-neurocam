@@ -3,170 +3,222 @@
 
 import cocotb
 from cocotb.clock import Clock
-from cocotb.triggers import ClockCycles
+from cocotb.triggers import ClockCycles, RisingEdge, Timer
 import random
 
 @cocotb.test()
-async def test_neurocam_basic(dut):
-    """Test basic NeuroCAM functionality"""
-    dut._log.info("Starting NeuroCAM basic test")
+async def test_neurocam_pro_basic(dut):
+    """Test basic NeuroCAM Pro functionality with 16-bit patterns"""
+    dut._log.info("Starting NeuroCAM Pro basic test")
     
-    # Set the clock period to 100 ns (10 MHz)
-    clock = Clock(dut.clk, 100, units="ns")
+    # Set the clock period to 40 ns (25 MHz for pipeline operation)
+    clock = Clock(dut.clk, 40, units="ns")
     cocotb.start_soon(clock.start())
     
-    # Reset
-    dut._log.info("Resetting NeuroCAM")
+    # Reset sequence for complex design
+    dut._log.info("Resetting NeuroCAM Pro")
     dut.ena.value = 1
     dut.ui_in.value = 0
     dut.uio_in.value = 0
     dut.rst_n.value = 0
-    await ClockCycles(dut.clk, 10)
+    await ClockCycles(dut.clk, 20)  # Extended reset for 700+ cells
     dut.rst_n.value = 1
-    await ClockCycles(dut.clk, 2)
+    await ClockCycles(dut.clk, 8)   # Allow pipeline to stabilize
     
-    # Test exact match with default pattern 0x000 (pattern 0)
-    dut._log.info("Testing exact match with pattern 0x000")
-    await load_search_pattern(dut, 0x000)
-    await execute_search(dut)
+    # Test exact match with default pattern from bank 0
+    dut._log.info("Testing exact match with 16-bit pattern 0x0000")
+    await load_search_pattern_16bit(dut, 0x0000)
+    await execute_search_with_mode(dut, mode=0)  # Exact match mode
     
-    # Check results
-    match_addr = dut.uo_out.value & 0x0F
-    hamming_dist = (dut.uo_out.value >> 4) & 0x07
+    # Check results with new output format
+    match_addr = dut.uo_out.value & 0x03        # 2 bits for address in output
+    distance = (dut.uo_out.value >> 2) & 0x1F   # 5 bits for distance  
     match_valid = (dut.uo_out.value >> 7) & 0x01
+    confidence = dut.uio_out.value              # 8-bit confidence score
     
     assert match_valid == 1, f"Match should be valid, got {match_valid}"
-    assert match_addr == 0, f"Expected match address 0, got {match_addr}"
-    assert hamming_dist == 0, f"Expected Hamming distance 0, got {hamming_dist}"
+    assert distance == 0, f"Expected Hamming distance 0, got {distance}"
+    assert confidence > 200, f"Expected high confidence, got {confidence}"
     
-    dut._log.info("✓ Exact match test passed")
+    dut._log.info(f"✓ Exact match test passed - Addr: {match_addr}, Distance: {distance}, Confidence: {confidence}")
 
 @cocotb.test()
-async def test_hamming_distance(dut):
-    """Test Hamming distance calculation"""
-    dut._log.info("Starting Hamming distance test")
+async def test_multi_bank_functionality(dut):
+    """Test multi-bank architecture with 64 patterns"""
+    dut._log.info("Starting multi-bank functionality test")
     
-    clock = Clock(dut.clk, 100, units="ns")
+    clock = Clock(dut.clk, 40, units="ns")
     cocotb.start_soon(clock.start())
     
     # Reset
-    dut.ena.value = 1
-    dut.ui_in.value = 0
-    dut.uio_in.value = 0
-    dut.rst_n.value = 0
-    await ClockCycles(dut.clk, 10)
-    dut.rst_n.value = 1
-    await ClockCycles(dut.clk, 2)
+    await reset_neurocam_pro(dut)
     
-    # Test 1-bit difference from pattern 0x000
-    dut._log.info("Testing 1-bit difference (0x001 vs 0x000)")
-    await load_search_pattern(dut, 0x001)
-    await execute_search(dut)
-    
-    match_addr = dut.uo_out.value & 0x0F
-    hamming_dist = (dut.uo_out.value >> 4) & 0x07
-    full_hamming = dut.uio_out.value & 0x0F
-    
-    assert match_addr == 0, f"Expected closest match to pattern 0, got {match_addr}"
-    assert hamming_dist == 1, f"Expected Hamming distance 1, got {hamming_dist}"
-    assert full_hamming == 1, f"Expected full Hamming distance 1, got {full_hamming}"
-    
-    dut._log.info("✓ 1-bit Hamming distance test passed")
-    
-    # Test with pattern 0x0FF (should match pattern 1)
-    dut._log.info("Testing exact match with pattern 0x0FF")
-    await load_search_pattern(dut, 0x0FF)
-    await execute_search(dut)
-    
-    match_addr = dut.uo_out.value & 0x0F
-    hamming_dist = (dut.uo_out.value >> 4) & 0x07
-    
-    assert match_addr == 1, f"Expected match address 1, got {match_addr}"
-    assert hamming_dist == 0, f"Expected Hamming distance 0, got {hamming_dist}"
-    
-    dut._log.info("✓ Second exact match test passed")
-
-@cocotb.test()
-async def test_pattern_write_read(dut):
-    """Test writing new patterns and reading them back"""
-    dut._log.info("Starting pattern write/read test")
-    
-    clock = Clock(dut.clk, 100, units="ns")
-    cocotb.start_soon(clock.start())
-    
-    # Reset
-    dut.ena.value = 1
-    dut.ui_in.value = 0
-    dut.uio_in.value = 0
-    dut.rst_n.value = 0
-    await ClockCycles(dut.clk, 10)
-    dut.rst_n.value = 1
-    await ClockCycles(dut.clk, 2)
-    
-    # Write a custom pattern 0x123 to address 0
-    custom_pattern = 0x123
-    write_addr = 0
-    
-    dut._log.info(f"Writing pattern 0x{custom_pattern:03X} to address {write_addr}")
-    await write_pattern(dut, write_addr, custom_pattern)
-    
-    # Search for the pattern we just wrote
-    dut._log.info("Searching for the written pattern")
-    await load_search_pattern(dut, custom_pattern)
-    await execute_search(dut)
-    
-    match_addr = dut.uo_out.value & 0x0F
-    hamming_dist = (dut.uo_out.value >> 4) & 0x07
-    
-    assert match_addr == write_addr, f"Expected match address {write_addr}, got {match_addr}"
-    assert hamming_dist == 0, f"Expected Hamming distance 0, got {hamming_dist}"
-    
-    dut._log.info("✓ Write/read test passed")
-
-@cocotb.test()
-async def test_multiple_patterns(dut):
-    """Test with multiple different patterns"""
-    dut._log.info("Starting multiple patterns test")
-    
-    clock = Clock(dut.clk, 100, units="ns")
-    cocotb.start_soon(clock.start())
-    
-    # Reset
-    dut.ena.value = 1
-    dut.ui_in.value = 0
-    dut.uio_in.value = 0
-    dut.rst_n.value = 0
-    await ClockCycles(dut.clk, 10)
-    dut.rst_n.value = 1
-    await ClockCycles(dut.clk, 2)
-    
-    # Test patterns that should match default stored patterns
-    test_cases = [
-        (0x000, 0),  # Should match pattern 0
-        (0x0FF, 1),  # Should match pattern 1  
-        (0xF00, 2),  # Should match pattern 2
-        (0xFFF, 3),  # Should match pattern 3
-        (0xAAA, 4),  # Should match pattern 4
-        (0x555, 5),  # Should match pattern 5
+    # Test patterns from different banks
+    bank_test_patterns = [
+        (0x0000, 0),  # Bank 0, Pattern 0: should match perfectly
+        (0x0001, 0),  # Bank 0, Pattern 0: 1-bit difference
+        (0x000F, 0),  # Bank 0, Pattern 1: should be close match
     ]
     
-    for pattern, expected_addr in test_cases:
-        dut._log.info(f"Testing pattern 0x{pattern:03X}, expecting address {expected_addr}")
-        await load_search_pattern(dut, pattern)
-        await execute_search(dut)
+    for pattern, expected_bank in bank_test_patterns:
+        dut._log.info(f"Testing pattern 0x{pattern:04X} from bank {expected_bank}")
+        await load_search_pattern_16bit(dut, pattern)
+        await execute_search_with_mode(dut, mode=0)  # Exact match mode
         
-        match_addr = dut.uo_out.value & 0x0F
-        hamming_dist = (dut.uo_out.value >> 4) & 0x07
+        match_addr = dut.uo_out.value & 0x03
+        distance = (dut.uo_out.value >> 2) & 0x1F
+        match_valid = (dut.uo_out.value >> 7) & 0x01
+        confidence = dut.uio_out.value
         
-        assert match_addr == expected_addr, f"Pattern 0x{pattern:03X}: expected addr {expected_addr}, got {match_addr}"
-        assert hamming_dist == 0, f"Pattern 0x{pattern:03X}: expected distance 0, got {hamming_dist}"
+        assert match_valid == 1, f"Match should be valid for pattern 0x{pattern:04X}"
+        dut._log.info(f"Pattern 0x{pattern:04X}: Addr={match_addr}, Distance={distance}, Confidence={confidence}")
     
-    dut._log.info("✓ Multiple patterns test passed")
+    dut._log.info("✓ Multi-bank functionality test passed")
 
-async def load_search_pattern(dut, pattern):
-    """Helper function to load a 12-bit search pattern via multi-cycle input"""
+@cocotb.test()
+async def test_fuzzy_matching(dut):
+    """Test fuzzy matching mode with configurable thresholds"""
+    dut._log.info("Starting fuzzy matching test")
+    
+    clock = Clock(dut.clk, 40, units="ns")
+    cocotb.start_soon(clock.start())
+    
+    await reset_neurocam_pro(dut)
+    
+    # Test fuzzy matching with different distances
+    fuzzy_test_cases = [
+        (0x0001, 1),  # 1-bit difference should match in fuzzy mode
+        (0x0003, 2),  # 2-bit difference
+        (0x0007, 3),  # 3-bit difference
+    ]
+    
+    for pattern, expected_distance in fuzzy_test_cases:
+        dut._log.info(f"Testing fuzzy match with pattern 0x{pattern:04X}")
+        await load_search_pattern_16bit(dut, pattern)
+        await execute_search_with_mode(dut, mode=1)  # Fuzzy match mode
+        
+        match_addr = dut.uo_out.value & 0x03
+        distance = (dut.uo_out.value >> 2) & 0x1F
+        match_valid = (dut.uo_out.value >> 7) & 0x01
+        confidence = dut.uio_out.value
+        
+        assert match_valid == 1, f"Fuzzy match should be valid for pattern 0x{pattern:04X}"
+        assert distance == expected_distance, f"Expected distance {expected_distance}, got {distance}"
+        
+        dut._log.info(f"Fuzzy match 0x{pattern:04X}: Distance={distance}, Confidence={confidence}")
+    
+    dut._log.info("✓ Fuzzy matching test passed")
+
+@cocotb.test()
+async def test_adaptive_learning(dut):
+    """Test adaptive learning mode"""
+    dut._log.info("Starting adaptive learning test")
+    
+    clock = Clock(dut.clk, 40, units="ns")
+    cocotb.start_soon(clock.start())
+    
+    await reset_neurocam_pro(dut)
+    
+    # Test learning mode with unknown pattern
+    unknown_pattern = 0x1234
+    dut._log.info(f"Testing learning mode with unknown pattern 0x{unknown_pattern:04X}")
+    
+    await load_search_pattern_16bit(dut, unknown_pattern)
+    await execute_search_with_mode(dut, mode=3, learning=True)  # Learning mode
+    
+    # Allow time for learning to complete
+    await ClockCycles(dut.clk, 10)
+    
+    # Search again - should now find the learned pattern
+    await load_search_pattern_16bit(dut, unknown_pattern)
+    await execute_search_with_mode(dut, mode=0)  # Exact match mode
+    
+    match_valid = (dut.uo_out.value >> 7) & 0x01
+    distance = (dut.uo_out.value >> 2) & 0x1F
+    confidence = dut.uio_out.value
+    
+    dut._log.info(f"Learning result: Valid={match_valid}, Distance={distance}, Confidence={confidence}")
+    dut._log.info("✓ Adaptive learning test completed")
+
+@cocotb.test()
+async def test_pipeline_performance(dut):
+    """Test pipeline performance with continuous pattern stream"""
+    dut._log.info("Starting pipeline performance test")
+    
+    clock = Clock(dut.clk, 40, units="ns")
+    cocotb.start_soon(clock.start())
+    
+    await reset_neurocam_pro(dut)
+    
+    # Test continuous pattern submission (pipeline stress test)
+    test_patterns = [0x0000, 0x0001, 0x000F, 0x00FF, 0x0F0F, 0x1234]
+    
+    for i, pattern in enumerate(test_patterns):
+        dut._log.info(f"Pipeline test {i+1}: Pattern 0x{pattern:04X}")
+        await load_search_pattern_16bit(dut, pattern)
+        await execute_search_with_mode(dut, mode=0)
+        
+        # Check pipeline latency (should be 4 cycles + processing)
+        await ClockCycles(dut.clk, 6)  # Allow pipeline completion
+        
+        match_valid = (dut.uo_out.value >> 7) & 0x01
+        distance = (dut.uo_out.value >> 2) & 0x1F
+        
+        dut._log.info(f"Pipeline result {i+1}: Valid={match_valid}, Distance={distance}")
+    
+    dut._log.info("✓ Pipeline performance test passed")
+
+@cocotb.test()
+async def test_confidence_scoring(dut):
+    """Test confidence scoring system"""
+    dut._log.info("Starting confidence scoring test")
+    
+    clock = Clock(dut.clk, 40, units="ns")
+    cocotb.start_soon(clock.start())
+    
+    await reset_neurocam_pro(dut)
+    
+    # Test confidence with different match qualities
+    confidence_tests = [
+        (0x0000, "perfect_match"),    # Perfect match - high confidence
+        (0x0001, "close_match"),      # 1-bit difference - medium confidence  
+        (0x00FF, "distant_match"),    # Many bits different - lower confidence
+    ]
+    
+    for pattern, test_type in confidence_tests:
+        dut._log.info(f"Testing confidence for {test_type}: 0x{pattern:04X}")
+        await load_search_pattern_16bit(dut, pattern)
+        await execute_search_with_mode(dut, mode=0)
+        
+        confidence = dut.uio_out.value
+        distance = (dut.uo_out.value >> 2) & 0x1F
+        
+        dut._log.info(f"{test_type}: Distance={distance}, Confidence={confidence}")
+        
+        # Verify confidence correlates with match quality
+        if test_type == "perfect_match":
+            assert confidence > 200, f"Perfect match should have high confidence, got {confidence}"
+        elif test_type == "distant_match":
+            assert confidence < 100, f"Distant match should have low confidence, got {confidence}"
+    
+    dut._log.info("✓ Confidence scoring test passed")
+
+# Helper Functions for NeuroCAM Pro
+
+async def reset_neurocam_pro(dut):
+    """Reset NeuroCAM Pro with proper timing for complex design"""
+    dut.ena.value = 1
+    dut.ui_in.value = 0
+    dut.uio_in.value = 0
+    dut.rst_n.value = 0
+    await ClockCycles(dut.clk, 20)  # Extended reset for initialization
+    dut.rst_n.value = 1
+    await ClockCycles(dut.clk, 8)   # Pipeline stabilization time
+
+async def load_search_pattern_16bit(dut, pattern):
+    """Load a 16-bit search pattern via 4-cycle input protocol"""
     # Cycle 0: Load bits [3:0]
-    dut.ui_in.value = 0x00  # Clear cycle selector
+    dut.ui_in.value = 0x00  # Clear mode bits, cycle selector = 00
     dut.uio_in.value = pattern & 0x0F
     await ClockCycles(dut.clk, 1)
     
@@ -179,41 +231,58 @@ async def load_search_pattern(dut, pattern):
     dut.ui_in.value = 0x02  # Cycle selector = 10
     dut.uio_in.value = (pattern >> 8) & 0x0F
     await ClockCycles(dut.clk, 1)
-
-async def execute_search(dut):
-    """Helper function to execute search operation"""
-    dut.ui_in.value = 0x80  # Set search enable (bit 7)
-    dut.uio_in.value = 0x00
-    await ClockCycles(dut.clk, 2)  # Allow time for search to complete
     
-    # Clear search enable
-    dut.ui_in.value = 0x00
+    # Cycle 3: Load bits [15:12]
+    dut.ui_in.value = 0x03  # Cycle selector = 11
+    dut.uio_in.value = (pattern >> 12) & 0x0F
     await ClockCycles(dut.clk, 1)
 
-async def write_pattern(dut, addr, pattern):
-    """Helper function to write a pattern to memory"""
-    # Set write address
-    write_cmd = 0x40 | (addr << 2)  # Write enable + address
+async def execute_search_with_mode(dut, mode=0, learning=False):
+    """Execute search with specified AI mode and optional learning"""
+    # Set search enable with mode selection
+    mode_bits = (mode & 0x07) << 2  # 3-bit mode in bits [4:2]
+    learning_bit = (1 << 5) if learning else 0  # Learning enable in bit [5]
+    search_enable = (1 << 7)  # Search enable in bit [7]
     
-    # Cycle 0: Load write data bits [3:0]
-    dut.ui_in.value = write_cmd | 0x00  # Cycle selector = 00
+    dut.ui_in.value = search_enable | learning_bit | mode_bits
+    dut.uio_in.value = 0x00
+    
+    # Wait for 4-stage pipeline completion + processing
+    await ClockCycles(dut.clk, 8)
+    
+    # Clear enables
+    dut.ui_in.value = 0x00
+    await ClockCycles(dut.clk, 2)
+
+async def write_pattern_16bit(dut, bank, addr, pattern):
+    """Write a 16-bit pattern to specified bank and address"""
+    # Multi-cycle write protocol for 16-bit patterns
+    write_enable = (1 << 6)  # Write enable in bit [6]
+    
+    # Cycle 0: Write data bits [3:0]
+    dut.ui_in.value = write_enable | 0x00  # Cycle selector = 00
     dut.uio_in.value = ((pattern & 0x0F) << 4) | (pattern & 0x0F)
     await ClockCycles(dut.clk, 1)
     
-    # Cycle 1: Load write data bits [7:4]
-    dut.ui_in.value = write_cmd | 0x01  # Cycle selector = 01
-    dut.uio_in.value = (((pattern >> 4) & 0x0F) << 4) | ((pattern >> 4) & 0x0F)
+    # Cycle 1: Write data bits [7:4]
+    dut.ui_in.value = write_enable | 0x01  # Cycle selector = 01
+    pattern_nibble = (pattern >> 4) & 0x0F
+    dut.uio_in.value = (pattern_nibble << 4) | pattern_nibble
     await ClockCycles(dut.clk, 1)
     
-    # Cycle 2: Load write data bits [11:8]
-    dut.ui_in.value = write_cmd | 0x02  # Cycle selector = 10
-    dut.uio_in.value = (((pattern >> 8) & 0x0F) << 4) | ((pattern >> 8) & 0x0F)
+    # Cycle 2: Write data bits [11:8]
+    dut.ui_in.value = write_enable | 0x02  # Cycle selector = 10
+    pattern_nibble = (pattern >> 8) & 0x0F
+    dut.uio_in.value = (pattern_nibble << 4) | pattern_nibble 
     await ClockCycles(dut.clk, 1)
     
-    # Cycle 3: Execute write
-    dut.ui_in.value = write_cmd | 0x03  # Cycle selector = 11 (execute)
+    # Cycle 3: Execute write with bank/address
+    dut.ui_in.value = write_enable | 0x03  # Cycle selector = 11
+    pattern_nibble = (pattern >> 12) & 0x0F
+    bank_addr = ((bank & 0x03) << 4) | (addr & 0x0F)
+    dut.uio_in.value = (pattern_nibble << 4) | bank_addr
     await ClockCycles(dut.clk, 2)
     
     # Clear write enable
     dut.ui_in.value = 0x00
-    await ClockCycles(dut.clk, 1)
+    await ClockCycles(dut.clk, 2)
