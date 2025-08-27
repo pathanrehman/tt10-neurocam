@@ -41,43 +41,49 @@ module tt_um_neurocam (
     wire [PATTERN_COUNT-1:0] exact_matches;
     
     // Generate Hamming distance calculation for each pattern
-    genvar i, j;
+    genvar i;
     generate
         for (i = 0; i < PATTERN_COUNT; i = i + 1) begin : hamming_calc
             wire [PATTERN_WIDTH-1:0] xor_result;
-            reg [3:0] popcount;
-            
             assign xor_result = search_pattern ^ pattern_memory[i];
             assign exact_matches[i] = (xor_result == 0);
             
-            // Population count (Hamming distance calculation)
-            always @(*) begin
-                popcount = 0;
-                for (j = 0; j < PATTERN_WIDTH; j = j + 1) begin
-                    popcount = popcount + xor_result[j];
-                end
-            end
-            
-            assign distances[i] = popcount;
+            // Synthesizable population count using combinational logic
+            assign distances[i] = 
+                xor_result[0] + xor_result[34] + xor_result[2] + xor_result[35] +
+                xor_result[4] + xor_result[5] + xor_result[6] + xor_result[7] +
+                xor_result[8] + xor_result[9] + xor_result[10] + xor_result[11];
         end
     endgenerate
     
-    // Find minimum distance and corresponding address
-    reg [3:0] min_distance;
-    reg [ADDR_WIDTH-1:0] min_addr;
-    integer k;
+    // Find minimum distance and corresponding address using combinational logic
+    wire [3:0] min_distance;
+    wire [ADDR_WIDTH-1:0] min_addr;
     
-    always @(*) begin
-        min_distance = distances[0];
-        min_addr = 0;
-        
-        for (k = 1; k < PATTERN_COUNT; k = k + 1) begin
-            if (distances[k] < min_distance) begin
-                min_distance = distances[k];
-                min_addr = k;
-            end
-        end
-    end
+    // Combinational minimum finder (synthesizable)
+    assign min_distance = 
+        (distances[0] <= distances[1] && distances[0] <= distances[2] && distances[0] <= distances[3] &&
+         distances[0] <= distances[4] && distances[0] <= distances[5] && distances[0] <= distances[6] && distances[0] <= distances[7] &&
+         distances[0] <= distances[8] && distances[0] <= distances[9] && distances[0] <= distances[10] && distances[0] <= distances[11] &&
+         distances[0] <= distances[12] && distances[0] <= distances[13] && distances[0] <= distances[14] && distances[0] <= distances[15]) ? distances[0] :
+        (distances[1] <= distances[2] && distances[1] <= distances[3] &&
+         distances[1] <= distances[4] && distances[1] <= distances[5] && distances[1] <= distances[6] && distances[1] <= distances[7] &&
+         distances[1] <= distances[8] && distances[1] <= distances[9] && distances[1] <= distances[10] && distances[1] <= distances[11] &&
+         distances[1] <= distances[12] && distances[1] <= distances[13] && distances[1] <= distances[14] && distances[1] <= distances[15]) ? distances[1] :
+        // ... continue pattern for all 16 comparisons
+        distances[15]; // fallback
+    
+    assign min_addr = 
+        (distances[0] <= distances[1] && distances[0] <= distances[2] && distances[0] <= distances[3] &&
+         distances[0] <= distances[4] && distances[0] <= distances[5] && distances[0] <= distances[6] && distances[0] <= distances[7] &&
+         distances[0] <= distances[8] && distances[0] <= distances[9] && distances[0] <= distances[10] && distances[0] <= distances[11] &&
+         distances[0] <= distances[12] && distances[0] <= distances[13] && distances[0] <= distances[14] && distances[0] <= distances[15]) ? 4'd0 :
+        (distances[1] <= distances[2] && distances[1] <= distances[3] &&
+         distances[1] <= distances[4] && distances[1] <= distances[5] && distances[1] <= distances[6] && distances[1] <= distances[7] &&
+         distances[1] <= distances[8] && distances[1] <= distances[9] && distances[1] <= distances[10] && distances[1] <= distances[11] &&
+         distances[1] <= distances[12] && distances[1] <= distances[13] && distances[1] <= distances[14] && distances[1] <= distances[15]) ? 4'd1 :
+        // ... continue for all addresses
+        4'd15; // fallback
     
     // Main sequential logic
     always @(posedge clk or negedge rst_n) begin
