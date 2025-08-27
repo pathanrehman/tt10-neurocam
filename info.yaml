@@ -1,11 +1,11 @@
 # Tiny Tapeout project information
 project:
-  title:        "NeuroCAM - AI Pattern Matching Engine"      # Project title
+  title:        "NeuroCAM Pro - Advanced AI Pattern Matching Engine"      # Project title
   author:       "Pathan Rehman Ahmed Khan"      # Your name
   discord:      ""      # Your discord username, for communication and automatically assigning you a Tapeout role (optional)
-  description:  "Content-Addressable Memory with Hamming distance calculation for AI pattern recognition and template matching applications"      # One line description of what your project does
+  description:  "Multi-bank Content-Addressable Memory with 64 patterns, 16-bit width, 4-stage pipeline, fuzzy matching, confidence scoring, and adaptive learning for advanced AI pattern recognition"      # One line description of what your project does
   language:     "Verilog" # other examples include SystemVerilog, Amaranth, VHDL, etc
-  clock_hz:     10000000       # Clock frequency in Hz (10MHz for reliable operation)
+  clock_hz:     25000000       # Clock frequency in Hz (25MHz for pipeline operation)
   # How many tiles your design occupies? A single tile is about 167x108 uM.
   tiles: "1x1"          # Valid values: 1x1, 1x2, 2x2, 3x2, 4x2, 6x2 or 8x2
   # Your top module name must start with "tt_um_". Make it unique by including your github username:
@@ -22,30 +22,30 @@ pinout:
   # Inputs
   ui[0]: "INPUT_CYCLE[0] - Input data cycle selector bit 0"
   ui[1]: "INPUT_CYCLE[1] - Input data cycle selector bit 1"
-  ui[2]: "WRITE_ADDR[0] - Write address bit 0"
-  ui[3]: "WRITE_ADDR[1] - Write address bit 1"
-  ui[4]: "WRITE_ADDR[2] - Write address bit 2"
-  ui[5]: "WRITE_ADDR[3] - Write address bit 3"
-  ui[6]: "WRITE_EN - Write enable signal"
-  ui[7]: "SEARCH_EN - Search enable signal"
+  ui[2]: "MATCH_MODE[0] - AI matching mode bit 0 (exact/fuzzy/partial/learning)"
+  ui[3]: "MATCH_MODE[1] - AI matching mode bit 1"
+  ui[4]: "MATCH_MODE[2] - AI matching mode bit 2"
+  ui[5]: "LEARN_EN - Adaptive learning enable"
+  ui[6]: "WRITE_EN - Pattern write enable"
+  ui[7]: "SEARCH_EN - Pattern search enable"
   # Outputs
-  uo[0]: "MATCH_ADDR[0] - Best match address bit 0"
+  uo[0]: "MATCH_ADDR[0] - Best match address bit 0 (6-bit address)"
   uo[1]: "MATCH_ADDR[1] - Best match address bit 1"
-  uo[2]: "MATCH_ADDR[2] - Best match address bit 2"
-  uo[3]: "MATCH_ADDR[3] - Best match address bit 3"
-  uo[4]: "HAMMING_DIST[0] - Hamming distance bit 0"
-  uo[5]: "HAMMING_DIST[1] - Hamming distance bit 1"
-  uo[6]: "HAMMING_DIST[2] - Hamming distance bit 2"
+  uo[2]: "DISTANCE[0] - Hamming distance bit 0 (5-bit distance)"
+  uo[3]: "DISTANCE[1] - Hamming distance bit 1"
+  uo[4]: "DISTANCE[2] - Hamming distance bit 2"
+  uo[5]: "DISTANCE[3] - Hamming distance bit 3"
+  uo[6]: "DISTANCE[4] - Hamming distance bit 4"
   uo[7]: "MATCH_VALID - Match result valid flag"
   # Bidirectional pins
-  uio[0]: "DATA_IN[0] - Input data bit 0 (search pattern/write data)"
-  uio[1]: "DATA_IN[1] - Input data bit 1 (search pattern/write data)"
-  uio[2]: "DATA_IN[2] - Input data bit 2 (search pattern/write data)"
-  uio[3]: "DATA_IN[3] - Input data bit 3 (search pattern/write data)"
-  uio[4]: "HAMMING_OUT[0] - Full Hamming distance output bit 0"
-  uio[5]: "HAMMING_OUT[1] - Full Hamming distance output bit 1"
-  uio[6]: "HAMMING_OUT[2] - Full Hamming distance output bit 2"
-  uio[7]: "HAMMING_OUT[3] - Full Hamming distance output bit 3"
+  uio[0]: "CONFIDENCE[0] - AI confidence score bit 0 (8-bit confidence)"
+  uio[1]: "CONFIDENCE[1] - AI confidence score bit 1"
+  uio[2]: "CONFIDENCE[2] - AI confidence score bit 2"
+  uio[3]: "CONFIDENCE[3] - AI confidence score bit 3"
+  uio[4]: "CONFIDENCE[4] - AI confidence score bit 4"
+  uio[5]: "CONFIDENCE[5] - AI confidence score bit 5"
+  uio[6]: "CONFIDENCE[6] - AI confidence score bit 6"
+  uio[7]: "CONFIDENCE[7] - AI confidence score bit 7"
 
 # Do not change!
 yaml_version: 6
